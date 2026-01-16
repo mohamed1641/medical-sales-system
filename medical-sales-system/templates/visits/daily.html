@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Daily Visits — Full Fields (with Phone){% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'assets/css/daily.css' %}">{% endblock %}
+
+{% block body %}
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+
+    <nav class="tabs" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a class="tab active" href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a class="tab active" href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+
+    <div style="flex:1"></div>
+    <button class="btn ghost" type="submit" form="logoutForm">Logout</button>
+    <a id="exportLink" class="btn ghost" href="?export=csv" title="Export Daily Visits CSV">Export CSV</a>
+  </div>
+</header>
+
+<main class="page">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <div class="title">Daily Visits</div>
+        <div class="muted">Rep sees his visits only • Manager sees all</div>
+      </div>
+
+      <div class="row" style="gap:12px;align-items:center">
+        <form id="listForm" method="get" action="." class="row" style="gap:12px;align-items:center">
+          <input id="dateFilter" class="control" type="date" name="date" value="{{ request.GET.date|default:'' }}">
+          <input id="searchBox" class="control" name="q" placeholder="Search by any field" value="{{ request.GET.q|default:'' }}">
+
+          <!-- Week filter + datalist -->
+          <input class="control" name="week" id="weekFilter" type="number" min="1" max="53"
+                 placeholder="Week # (filter)" list="week-list"
+                 value="{{ request.GET.week|default:current_week }}">
+          <datalist id="week-list">
+            {% for w in week_choices %}
+              <option value="{{ w }}"></option>
+            {% endfor %}
+          </datalist>
+        </form>
+      </div>
+
+      {# Approved plans for the Rep to start from (no sync) #}
+      {% if not mgr and approved_plans %}
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">
+          <span class="muted" style="margin-right:6px">Approved Plans:</span>
+          {% for p in approved_plans %}
+            <a class="btn small"
+               href="{% url 'visits:start_from_weekly' p.id %}"
+               title="Week {{ p.week_number }} — {{ p.entity_address }}">
+              Select W{{ p.week_number }} — {{ p.entity_address|default:'—'|truncatechars:24 }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Visited Account</th>
+            <th>Actual Visit Date</th>
+            <th>Time Shift</th>
+            <th>Doctor Name</th>
+            <th>Phone Number</th>
+            <th>Sales Rep</th>
+            <th>Visit Outcome</th>
+            <th>Additional Outcome</th>
+            <th>Visit Status</th>
+            <th>Weekly Plan</th>
+            <th>Client (Doctor)</th>
+            <th>Activity</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if visits %}
+            {% for v in visits %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{% firstof v.entity v.visited_account "—" %}</td>
+                <td>
+                  {% if v.actual_datetime %}
+                    {{ v.actual_datetime|date:"Y-m-d H:i" }}
+                  {% else %}
+                    {% firstof v.visit_date "—" %}
+                  {% endif %}
+                </td>
+                <td>{% firstof v.time_shift "—" %}</td>
+                <td>{% firstof v.client_doctor v.doctor_name v.client.doctor_name "—" %}</td>
+                <td>{% firstof v.phone v.phone_number "—" %}</td>
+                <td>
+                  {% if v.rep %}
+                    {% firstof v.rep.get_full_name v.rep.username "—" %}
+                  {% else %}—{% endif %}
+                </td>
+                <td>{% firstof v.visit_objective v.visit_outcome "—" %}</td>
+                <td>{% firstof v.other_objective v.additional_outcome "—" %}</td>
+                <td>{% firstof v.visit_status v.status "—" %}</td>
+                <td>
+                  {% if v.weekly_plan_id %}
+                    #{{ v.weekly_plan_id }}{% if v.weekly_plan %} — {{ v.weekly_plan.aa_plan }}{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td>{% firstof v.client_doctor v.client.doctor_name "—" %}</td>
+                <td>
+                  {% if v.is_deleted %}
+                    <span class="badge">Deleted</span>
+                  {% endif %}
+                  {% firstof v.last_change "—" %}
+                </td>
+                <td>
+                  <button type="button" class="btn small edit-btn"
+                    data-id="{{ v.id }}"
+                    data-entity="{% firstof v.entity v.visited_account '' %}"
+                    data-actual_datetime="{% if v.actual_datetime %}{{ v.actual_datetime|date:'Y-m-d\\TH:i' }}{% endif %}"
+                    data-time_shift="{% firstof v.time_shift '' %}"
+                    data-client_doctor="{% firstof v.client_doctor v.client.doctor_name '' %}"
+                    data-phone="{% firstof v.phone v.phone_number '' %}"
+                    data-rep="{{ v.rep_id }}"
+                    data-visit_objective="{% firstof v.visit_objective v.visit_outcome '' %}"
+                    data-other_objective="{% firstof v.other_objective v.additional_outcome '' %}"
+                    data-visit_status="{% firstof v.visit_status v.status '' %}"
+                    data-weekly_plan_id="{% firstof v.weekly_plan_id '' %}"
+                    data-address="{% firstof v.address v.client.location '' %}"
+                    data-city="{% firstof v.city v.client.city '' %}">Edit</button>
+                </td>
+              </tr>
+            {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+{% if request.user.is_authenticated and request.user.groups.all.0.name != 'Manager' %}
+<section class="card" style="max-width:1200px;margin:16px auto;padding:16px">
+  <div class="title" style="margin-bottom:10px">Create / Edit Visit</div>
+
+  <form id="vForm" class="grid g-3" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="id">
+
+    <div class="field">
+      <label>Visited Account</label>
+      <input class="control" name="entity" required placeholder="Hospital / Clinic name">
+    </div>
+
+    <div class="field">
+      <label>Actual Visit Date & Time</label>
+      <input class="control" type="datetime-local" name="actual_datetime" required>
+    </div>
+
+    <div class="field">
+      <label>Time Shift</label>
+      <select class="control" name="time_shift" id="timeShiftSelect">
+        <option value="">Select…</option>
+        <option>AM</option>
+        <option>PM</option>
+        <option>Evening</option>
+        <option>Night</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Doctor Name</label>
+      <input class="control" name="client_doctor" id="doctorNameInput">
+    </div>
+
+    <div class="field">
+      <label>Phone Number</label>
+      <input class="control" name="phone" pattern="[\d+][\d\s+()-]{5,}" placeholder="+201234567890">
+    </div>
+
+    <div class="field">
+      <label>Address</label>
+      <input class="control" name="address" placeholder="Street, Area…">
+    </div>
+
+    <div class="field">
+      <label>City</label>
+      <input class="control" name="city" placeholder="City">
+    </div>
+
+    <div class="field">
+      <label>Sales Rep</label>
+      <select class="control" name="rep" id="repSelect">
+        {% for r in rep_choices %}
+          <option value="{{ r.id }}" {% if r.id == request.user.id %}selected{% endif %}>
+            {{ r.get_full_name|default:r.username }}
+          </option>
+        {% empty %}
+          <option value="{{ request.user.id }}" selected>{{ request.user.get_full_name|default:request.user.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Visit Outcome</label>
+      <select class="control" name="visit_objective">
+        <option value="">Select…</option>
+        <option>Deal Closed</option>
+        <option>Rejected</option>
+        <option>Potential</option>
+        <option>Unavailable</option>
+        <option>Commitment for Trial / Demo</option>
+        <option>Needs Assessment Completed</option>
+        <option>Quotation Requested / Budget Shared</option>
+        <option>Order Confirmation</option>
+        <option>Waiting for Approval (Purchase / Finance)</option>
+        <option>Technical Objection Raised</option>
+        <option>Positive Feedback Received</option>
+        <option>Lost to Competitor</option>
+      </select>
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Additional Visit Outcome (Notes)</label>
+      <input class="control" name="other_objective" placeholder="Any details or notes">
+    </div>
+
+    <div class="field">
+      <label>Visit Status</label>
+      <select class="control" name="visit_status">
+        <option value="">Select…</option>
+        <option>Not Completed</option>
+        <option>Postponed</option>
+        <option>Completed</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Weekly Plan</label>
+      <select name="weekly_plan" id="weekly_plan" class="input">
+        <option value="">Link a weekly plan (optional)</option>
+        {% for p in weekly_choices %}
+          <option
+            value="{{ p.id }}"
+            data-client="{{ p.visit_objective|default_if_none:'' }}"
+            data-addr="{{ p.entity_address|default_if_none:'' }}"
+            data-week="{{ p.week_number }}"
+          >
+            Week {{ p.week_number }} — {{ p.entity_address }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Week Number</label>
+      <input class="control" name="week_number" id="weekNumberInput" type="number" min="1" max="53"
+             required list="week-list" value="{{ request.GET.week|default:current_week }}">
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" type="submit" id="moveBtn">Move to Client</button>
+        <button class="btn ghost" type="button" id="newBtn">New</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="muted" style="padding:8px 0 0 4px">
+    كل الحقول إلزامية للـ Rep. (ملاحظات Additional اختيارية)
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  // ===== تحديث لينك الـExport مع الفلاتر =====
+  const listForm   = document.getElementById('listForm');
+  const exportLink = document.getElementById('exportLink');
+  function updateExportHref(){
+    if (!listForm || !exportLink) return;
+    const fd = new FormData(listForm);
+    const qs = new URLSearchParams(fd).toString();
+    let href = '?export=csv';
+    if (qs) href += '&' + qs;
+    exportLink.setAttribute('href', href);
+  }
+  if (listForm) {
+    listForm.addEventListener('change', ()=>{ listForm.submit(); });
+    listForm.addEventListener('keyup',  (e)=>{
+      if (e.target.name==='q' && e.key==='Enter'){ e.preventDefault(); listForm.submit(); }
+    });
+    updateExportHref();
+  }
+
+  // ===== ربط Weekly Plan → يملّي (doctor / week / address) =====
+  const weeklyPlan  = document.getElementById('weekly_plan');
+  const clientInput = document.getElementById('doctorNameInput');      // نفس client_doctor
+  const clientHidden= document.querySelector('input[name="client_doctor"]');
+  const weekInput   = document.getElementById('weekNumberInput');      // ده الموجود فعلاً
+  const addrInput   = document.querySelector('input[name="address"]');
+  function applyFromPlan(opt){
+    if (!opt) return;
+    const c  = opt.getAttribute('data-client') || '';
+    const wk = opt.getAttribute('data-week')   || '';
+    const ad = opt.getAttribute('data-addr')   || '';
+    if (clientInput && !clientInput.value && c) clientInput.value = c;
+    if (clientHidden && !clientHidden.value && c) clientHidden.value = c;
+    if (weekInput && !weekInput.value && wk)    weekInput.value   = wk;
+    if (addrInput && !addrInput.value && ad)    addrInput.value   = ad;
+  }
+  if (weeklyPlan) {
+    weeklyPlan.addEventListener('change', function(){
+      const opt = this.options[this.selectedIndex];
+      applyFromPlan(opt);
+    });
+  }
+
+  // ===== استنتاج الـTime Shift من التاريخ =====
+  const dtInput  = document.querySelector('input[name="actual_datetime"]');
+  const shiftSel = document.getElementById('timeShiftSelect');
+  function deriveShiftFromDT() {
+    if (!dtInput || !shiftSel) return;
+    const v = dtInput.value;
+    if (!v || v.length < 16) return;
+    const hh = parseInt(v.substring(11,13), 10);
+    let val = '';
+    if (hh >= 5 && hh < 12) val = 'AM';
+    else if (hh >= 12 && hh < 17) val = 'PM';
+    else if (hh >= 17 && hh < 22) val = 'Evening';
+    else val = 'Night';
+    shiftSel.value = val;
+  }
+  if (dtInput) {
+    dtInput.addEventListener('change', deriveShiftFromDT);
+    dtInput.addEventListener('input',  deriveShiftFromDT);
+  }
+
+  // ===== زر Edit يملّي الفورم من الداتا-أتربيوتس (أسماء جديدة متوافقة مع الموديل) =====
+  const form = document.getElementById('vForm');
+  function fillFormFromBtn(btn){
+    if (!form) return;
+    form.querySelector('input[name="id"]').value = btn.getAttribute('data-id') || '';
+
+    const set = (sel, val)=>{ const el=form.querySelector(sel); if(el) el.value = (val || ''); };
+
+    set('input[name="entity"]',           btn.getAttribute('data-entity'));
+    set('input[name="actual_datetime"]',  btn.getAttribute('data-actual_datetime'));
+    if (shiftSel) shiftSel.value = btn.getAttribute('data-time_shift') || '';
+    set('input[name="client_doctor"]',    btn.getAttribute('data-client_doctor'));
+    set('input[name="phone"]',            btn.getAttribute('data-phone'));
+    set('input[name="address"]',          btn.getAttribute('data-address'));
+    set('input[name="city"]',             btn.getAttribute('data-city'));
+    const repSel = document.getElementById('repSelect');
+    if (repSel) repSel.value = btn.getAttribute('data-rep') || repSel.value;
+    const vo = form.querySelector('select[name="visit_objective"]');
+    if (vo)  vo.value = btn.getAttribute('data-visit_objective') || '';
+    set('input[name="other_objective"]',  btn.getAttribute('data-other_objective'));
+    const vs = form.querySelector('select[name="visit_status"]');
+    if (vs)  vs.value = btn.getAttribute('data-visit_status') || '';
+    const wpSel = document.getElementById('weekly_plan');
+    const wpId  = btn.getAttribute('data-weekly_plan_id') || '';
+    if (wpSel) {
+      wpSel.value = wpId;
+      const opt = wpSel.options[wpSel.selectedIndex];
+      applyFromPlan(opt);
+    }
+    if (shiftSel && (!shiftSel.value || shiftSel.value === '')) deriveShiftFromDT();
+    form.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  document.addEventListener('click', function(e){
+    const t = e.target;
+    if (t && t.classList.contains('edit-btn')) {
+      e.preventDefault();
+      fillFormFromBtn(t);
+    }
+  });
+
+  // ===== فتح تلقائي لو فيه ?edit=<id> =====
+  (function autoOpenFromQuery() {
+    const params = new URLSearchParams(location.search);
+    const editId = params.get('edit');
+    if (!editId) return;
+    const btn = document.querySelector(`.edit-btn[data-id="${editId}"]`);
+    if (btn) btn.click();
+  })();
+
+  // ===== زر Move to Client =====
+  // ملحوظة مهمة: مفيش أي intercept لـ submit هنا علشان ما نعطّل الـaction
+  const moveBtn = document.getElementById('moveBtn');
+  if (form && moveBtn) {
+    moveBtn.addEventListener('click', function(e){
+      const id = form.querySelector('input[name="id"]').value.trim();
+      if (!id) {
+        e.preventDefault();
+        alert('اختار زيارة من الجدول (Edit) أو أنشئها من Approved Plans الأول.');
+        return false;
+      }
+      form.action = `/visits/${id}/move-to-client/`;
+      // هنسيب المتصفح يكمّل الـsubmit الطبيعي
+    });
+  }
+})();
+</script>
+{% endblock %}

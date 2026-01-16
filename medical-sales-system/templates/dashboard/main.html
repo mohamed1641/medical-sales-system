@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/css/dashboard.css' %}">
+{% endblock %}
+
+{% block body %}
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+    <nav class="tabs" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a class="tab active" href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a class="tab" href="{% url 'plans:weekly' %}">Weekly Plans</a>
+        <a class="tab" href="{% url 'visits:daily' %}">Daily Visits</a>
+        <a class="tab" href="{% url 'clients:list' %}">Clients</a>
+        <a class="tab" href="{% url 'reps:list' %}">Reps</a>
+        <a class="tab" href="{% url 'archives:list' %}">Archives</a>
+      {% else %}
+        <a class="tab" href="{% url 'plans:weekly' %}">Weekly Plans</a>
+        <a class="tab" href="{% url 'visits:daily' %}">Daily Visits</a>
+        <a class="tab" href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+    <div style="flex:1"></div>
+    <a id="logoutBtn" href="{% url 'accounts:logout' %}" class="btn ghost">Logout</a>
+  </div>
+</header>
+
+<main class="page">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <div class="title">Main Dashboard</div>
+        <div class="muted">Manager only — overview and KPIs</div>
+      </div>
+      <div class="row">
+        <select id="range" class="badge">
+          <option value="7"  {% if range == '7' %}selected{% endif %}>Last 7 days</option>
+          <option value="30" {% if range == '30' %}selected{% endif %}>Last 30 days</option>
+          <option value="90" {% if range == '90' %}selected{% endif %}>Last 90 days</option>
+          <option value="all" {% if range == 'all' %}selected{% endif %}>All time</option>
+        </select>
+        <span class="badge">Read-only</span>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Total Visits</div>
+        <div class="val" id="k_total">{{ dash.kpis.total }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Approved Weekly Tasks</div>
+        <div class="val" id="k_approved">{{ dash.kpis.approved }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Deals Closed</div>
+        <div class="val" id="k_deals">{{ dash.kpis.deals }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Active Reps</div>
+        <div class="val" id="k_reps">{{ dash.kpis.reps }}</div>
+      </div>
+    </div>
+
+    <div class="grid panel-pad" style="grid-template-columns:2fr 1fr">
+      <div class="card">
+        <div class="card-head"><div class="title">Visits by Rep</div><div class="muted" id="repTotal"></div></div>
+        <div class="panel-pad" id="bars"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="title">Snapshot</div></div>
+        <div class="panel-pad">
+          <div class="barrow"><span class="barlbl">Conversion</span><span id="conv" class="badge">{{ dash.kpis.conversion }}%</span></div>
+          <div class="barrow"><span class="barlbl">Clients</span><span id="clientsCount" class="badge">{{ dash.kpis.clients_count }}</span></div>
+          <div class="barrow"><span class="barlbl">Upcoming Weekly (7d)</span><span id="upcoming" class="badge">{{ dash.kpis.upcoming }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card panel-pad section">
+      <div class="card-head" style="border-bottom:none">
+        <div class="title">Monthly Trend (last 12 months)</div>
+        <div class="legend">
+          <span class="lbox" style="background: var(--accent)"></span><span class="muted">Visits</span>
+          <span class="lbox" style="background: var(--accent-3)"></span><span class="muted">Deals</span>
+        </div>
+      </div>
+      <div class="canvas-wrap" style="height:300px">
+        <canvas id="lineChart" style="width:100%;height:100%"></canvas>
+        <div id="tip" class="tooltip"></div>
+      </div>
+    </div>
+
+    <div class="grid panel-pad" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <div class="card-head"><div class="title">Recent Daily Visits</div></div>
+        <div class="table-wrap">
+          <table id="t_recent">
+            <thead>
+              <tr><th>Date/Time</th><th>Rep</th><th>Account</th><th>Doctor</th><th>Outcome</th></tr>
+            </thead>
+            <tbody>
+              {% for visit in dash.recent %}
+              <tr>
+                <td>{{ visit.dt }}</td>
+                <td>{{ visit.rep }}</td>
+                <td>{{ visit.account }}</td>
+                <td>{{ visit.doctor }}</td>
+                <td>{{ visit.outcome }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5">No recent visits</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="title">Next 7 Days — Weekly (Approved)</div></div>
+        <div class="table-wrap">
+          <table id="t_next">
+            <thead>
+              <tr><th>Planned Date</th><th>Rep</th><th>Plan</th><th>Objective</th></tr>
+            </thead>
+            <tbody>
+              {% for plan in dash.upcoming %}
+              <tr>
+                <td>{{ plan.date }}</td>
+                <td>{{ plan.rep }}</td>
+                <td>{{ plan.plan }}</td>
+                <td>{{ plan.obj }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4">No upcoming weekly plans</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-pad muted">* Values are live — pulled from DB.</div>
+  </section>
+</main>
+
+<!-- Pass the data to JS -->
+{{ dash|json_script:"dashdata" }}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Fetch the data from the template
+const data = JSON.parse(document.getElementById('dashdata').textContent);
+
+// Create the chart using Chart.js
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('lineChart').getContext('2d');
+  
+  const chart = new Chart(ctx, {
+    type: 'line', // Change to bar, pie, etc., if needed
+    data: {
+      labels: data.trend.labels,  // Months (example)
+      datasets: [
+        {
+          label: 'Visits',
+          data: data.trend.visits,  // Monthly visits data
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 2,
+          fill: false,
+        },
+        {
+          label: 'Deals',
+          data: data.trend.deals,  // Monthly deals data
+          borderColor: 'rgba(153, 102, 255, 1)',
+          borderWidth: 2,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      },
+      responsive: true
+    }
+  });
+});
+</script>
+{% endblock %}

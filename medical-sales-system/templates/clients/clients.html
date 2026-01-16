@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Clients — Full Fields{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'assets/css/clients.css' %}">{% endblock %}
+
+{% block body %}
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">{% csrf_token %}</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+
+    <nav class="tabs" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a class="tab active" href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a class="tab active" href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+
+    <div style="flex:1"></div>
+    <button class="btn ghost" type="submit" form="logoutForm">Logout</button>
+    <a id="exportLink" class="btn ghost" href="?export=csv" title="Export Clients CSV">Export CSV</a>
+  </div>
+</header>
+
+<main class="page">
+  {% if messages %}
+    <div class="card" style="max-width:1200px;margin:16px auto;padding:12px">
+      {% for message in messages %}
+        <div class="muted" style="margin:4px 0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <section class="card">
+    <div class="table-wrap">
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Doctor / Entity</th>
+        <th>City</th>
+        <th>Location</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Rep</th>
+        <th>Week #</th>
+        <th>Daily Visits</th>
+        <th>Last Visit Date</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clients %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+
+          {# Doctor / Entity (الاتنين معًا) #}
+          <td>
+            {% if c.doctor_name or c.entity_name %}
+              {{ c.doctor_name|default_if_none:"" }}{% if c.doctor_name and c.entity_name %} — {% endif %}{{ c.entity_name|default_if_none:"" }}
+            {% else %}—{% endif %}
+          </td>
+
+          <td>{{ c.city|default:"—" }}</td>
+
+          <td>
+            {% if c.location %}
+              <a class="badge link" target="_blank" href="https://www.google.com/maps?q={{ c.location|urlencode }}">Open</a>
+            {% else %}—{% endif %}
+          </td>
+
+          <td>{{ c.phone|default:"—" }}</td>
+          <td>{{ c.email|default:"—" }}</td>
+
+          <td>
+            {% if c.status == 'Active' %}
+              <span class="badge" style="background:#18a558">Active</span>
+            {% elif c.status == 'Not Interested' %}
+              <span class="badge" style="background:#e53935">Not Interested</span>
+            {% else %}
+              <span class="badge" style="background:#6c63ff">Potential</span>
+            {% endif %}
+          </td>
+
+          <td>{% if c.rep %}{{ c.rep.get_full_name|default:c.rep.username }}{% else %}—{% endif %}</td>
+          <td>{{ c.week_number|default:"—" }}</td>
+          <td>{{ c.daily_visits_count|default:"—" }}</td>
+          <td>{{ c.last_visit_date|default:"—" }}</td>
+          <td>{{ c.notes|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="12" class="muted">No clients</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+  </section>
+</main>
+
+{# الفورم يظهر للـ Rep فقط #}
+{% if request.user.is_authenticated and request.user.groups.all.0.name != 'Manager' %}
+<section class="card" style="max-width:1200px;margin:16px auto;padding:16px">
+  <div class="title" style="margin-bottom:10px">Create / Edit Client</div>
+
+  <form id="cForm" class="grid g-3" method="post" action="{% url 'clients:list' %}">
+    {% csrf_token %}
+    <input type="hidden" name="id">
+
+    {# ✅ الإضافة الجديدة: اختيار الزيارة اليومية (بدون تغيير شكل/ستايل) #}
+    <div class="field">
+      <label>اختر الزيارة اليومية</label>
+      <select name="daily_visit" class="control" required>
+        <option value="">اختر الزيارة اليومية</option>
+        {% for v in daily_visits %}
+          <option value="{{ v.id }}">
+            W{{ v.week_number }} — {{ v.visit_date }} — {% firstof v.entity "—" %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {# ====== نهاية الإضافة ====== #}
+
+    <div class="field"><label>Doctor Name</label>
+      <input class="control" name="doctor_name" required minlength="2">
+    </div>
+
+    <div class="field"><label>Entity Name</label>
+      <input class="control" name="entity_name">
+    </div>
+
+    <div class="field"><label>City</label>
+      <input class="control" name="city">
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Location</label>
+      <div class="grid g-2">
+        <input class="control" name="location" placeholder="lat, lon or address…" id="location-input">
+        <div class="row">
+          <button type="button" class="btn" data-loc-for="location">📍 Current Location</button>
+          <a id="mapLink" class="badge link" target="_blank" style="display:none">Open in Maps</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="field"><label>Phone</label>
+      <input class="control" name="phone" pattern="[\d+][\d\s+()-]{5,}" placeholder="+201234567890">
+    </div>
+
+    <div class="field"><label>Email</label>
+      <input class="control" type="email" name="email">
+    </div>
+
+    <div class="field">
+      <label>Status</label>
+      <select class="control" name="status">
+        <option value="">Select…</option>
+        <option>Potential</option>
+        <option>Active</option>
+        <option>Not Interested</option>
+      </select>
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Notes (optional)</label>
+      <input class="control" name="notes" placeholder="Any notes…">
+    </div>
+
+    {# Week Number ثابت: hidden فقط (مش ظاهر للمستخدم) #}
+    <input type="hidden" name="week_number" id="weekNumberHidden" value="{{ request.GET.week|default:'' }}">
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn primary" type="submit">Save</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'assets/js/geo.js' %}"></script>
+<script>
+  // تحديث رابط التصدير بنفس فلاتر الهيدر (اختياري بس مفيد)
+  (function(){
+    const hdr = document.getElementById('hdrForm');
+    const exportLink = document.getElementById('exportLink');
+    if (!hdr || !exportLink) return;
+    function syncExport(){
+      const qs = new URLSearchParams(new FormData(hdr)).toString();
+      exportLink.href = qs ? ('?export=csv&' + qs) : '?export=csv';
+    }
+    hdr.addEventListener('change', syncExport);
+    hdr.addEventListener('keyup', (e)=>{ if(e.target.name==='q' && e.key==='Enter'){ e.preventDefault(); hdr.submit(); }});
+    syncExport();
+  })();
+</script>
+{% endblock %}
+
+
+
+{% comment %} {% block extra_js %}
+<script>
+// ===== Location: show Google Maps link when typing or getting current position =====
+document.addEventListener('DOMContentLoaded', () => {
+  const btn   = document.querySelector('[data-loc-for="location"]');
+  const input = document.querySelector('input[name="location"]');
+  const link  = document.getElementById('mapLink');
+
+  function updateMapLink(){
+    var v = (input && input.value || '').trim();
+    if (!link) return;
+    if (v) {
+      link.href = 'https://www.google.com/maps?q=' + encodeURIComponent(v);
+      link.style.display = 'inline-block';
+    } else {
+      link.removeAttribute('href');
+      link.style.display = 'none';
+    }
+  }
+
+  if (input) {
+    input.addEventListener('input', updateMapLink);
+    updateMapLink();
+  }
+
+  if (btn && input) {
+    btn.addEventListener('click', () => {
+      if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+      btn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const lat = pos.coords.latitude.toFixed(6);
+          const lon = pos.coords.longitude.toFixed(6);
+          input.value = `${lat}, ${lon}`; // حفظ الإحداثيات في الحقل
+          
+          // تحويل الإحداثيات إلى عنوان باستخدام Google Maps Geocoding API
+          fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=YOUR_GOOGLE_MAPS_API_KEY`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.results && data.results[0]) {
+                const address = data.results[0].formatted_address;
+                input.value = address;  // عرض العنوان بدلاً من الإحداثيات
+                updateMapLink();  // تحديث رابط الخرائط
+              }
+            })
+            .catch(error => console.log('Error:', error));
+
+          btn.disabled = false;
+        },
+        err => { alert('Unable to get location'); btn.disabled = false; },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+  }
+});
+</script>
+{% endblock %} {% endcomment %}

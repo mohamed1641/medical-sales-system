@@ -1,0 +1,5 @@
+/* Weekly: action buttons coloring */
+.btn.success{background:#16a34a;color:#fff;border-color:transparent}
+.btn.success:hover{filter:brightness(.95)}
+.btn.danger{background:#dc2626;color:#fff;border-color:transparent}
+.btn.danger:hover{filter:brightness(.95)}

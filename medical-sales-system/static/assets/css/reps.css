@@ -1,0 +1,10 @@
+.btn.success{background:#16a34a;color:#fff;border-color:transparent}
+.btn.success:hover{filter:brightness(.95)}
+.btn.danger{background:#dc2626;color:#fff;border-color:transparent}
+.btn.danger:hover{filter:brightness(.95)}
+
+.flash-stack{max-width:1200px;margin:12px auto}
+.flash{padding:10px 12px;border-radius:10px;background:#111;border:1px solid #333}
+.flash.success{border-color:#16a34a}
+.flash.warning{border-color:#facc15}
+.flash.error{border-color:#dc2626}

@@ -1,0 +1,10 @@
+#tbl { width:100%; border-collapse:collapse; }
+#tbl th, #tbl td { padding:10px 12px; border-bottom:1px solid #222; }
+#tbl thead th { font-weight:600; opacity:.9; }
+.table-wrap { overflow-x:auto; }
+
+.grid.g-3 { display:grid; grid-template-columns:repeat(3, minmax(240px,1fr)); gap:12px; }
+.grid.g-2 { display:grid; grid-template-columns:1fr auto; gap:8px; }
+.field label { display:block; margin:0 0 6px; font-size:.95rem; opacity:.85; }
+.control { width:100%; }
+@media (max-width:900px){ .grid.g-3{ grid-template-columns:1fr; } .grid.g-2{ grid-template-columns:1fr; } }

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Weekly Plans — Full Fields{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/css/weekly.css' %}">
+{% endblock %}
+
+{% block body %}
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+    <nav class="tabs" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a class="tab active" href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a class="tab active" href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+    <div style="flex:1"></div>
+    <button class="btn ghost" id="logoutBtn" type="submit" form="logoutForm">Logout</button>
+    <a class="btn ghost" href="?export=csv" title="Export Weekly Plans CSV">Export CSV</a>
+  </div>
+</header>
+
+<main class="page">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <div class="title">Weekly Plans</div>
+        <div class="muted">Rep submits → Manager approves → Rep starts visit from Daily</div>
+      </div>
+      <div class="row" style="gap:12px;align-items:center">
+        <form method="get" action="." class="row" style="gap:12px;align-items:center">
+          <input id="searchBox" class="control" name="q" placeholder="Search by any field or phone" value="{{ request.GET.q|default:'' }}">
+        </form>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Aa Plan</th>
+            <th>Planned Date</th>
+            <th>Product Line</th>
+            <th>Entity Address</th>
+            <th>Entity Type</th>
+            <th>Specialization</th>
+            <th>Notes</th>
+            <th>Visit Objective</th>
+            <th>Other Objective?</th>
+            <th>Rep</th>
+            <th>Week No.</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for p in plans %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td>{{ p.aa_plan }}</td>
+              <td>{{ p.planned_date }}</td>
+              <td>{{ p.product_line }}</td>
+              <td>{{ p.entity_address }}</td>
+              <td>{{ p.entity_type }}</td>
+              <td>{{ p.specialization }}</td>
+              <td>{{ p.notes }}</td>
+              <td>{{ p.visit_objective }}</td>
+              <td>{% if p.visit_objective == 'Other' %}{{ p.other_objective }}{% else %}—{% endif %}</td>
+              <td>{{ p.rep.get_full_name|default:p.rep.username }}</td>
+              <td>{{ p.week_number }}</td>
+              <td class="status">{{ p.get_status_display }}</td>
+              <td>
+                {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+                  {% if p.status == 'pending' %}
+                    <div class="row" style="gap:6px">
+                      <form method="post" action="{% url 'plans:approve' p.id %}" style="display:inline">
+                        {% csrf_token %}
+                        <button class="btn success" type="submit">Approve</button>
+                      </form>
+                      <form method="post" action="{% url 'plans:reject' p.id %}" style="display:inline">
+                        {% csrf_token %}
+                        <button class="btn danger" type="submit">Not Approve</button>
+                      </form>
+                    </div>
+                  {% else %}
+                    <span class="badge">{{ p.get_status_display }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge">{{ p.get_status_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="14" class="muted">No plans yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+{% if request.user.is_authenticated and request.user.groups.all.0.name != 'Manager' %}
+<section class="card" style="max-width:1200px;margin:16px auto;padding:16px">
+  <div class="title" style="margin-bottom:10px">Create / Edit Weekly Plan</div>
+  <form id="wkForm" class="grid g-3" method="post" action="{% url 'plans:weekly' %}">
+    {% csrf_token %}
+    <input type="hidden" name="id">
+
+    <div class="field">
+      <label>Aa Plan</label>
+      <input class="control" name="aa_plan" required minlength="2">
+    </div>
+
+    <div class="field">
+      <label>Planned Date</label>
+      <input class="control" type="date" name="planned_date" required>
+    </div>
+
+    <div class="field">
+      <label>Targeted Product Line</label>
+      <select class="control" name="product_line" required>
+        <option value="">Select…</option>
+        <option value="D.V.I">D.V.I</option>
+        <option value="Amitech">Amitech</option>
+      </select>
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Entity's Address</label>
+      <div class="grid g-2">
+        <input class="control" name="entity_address" placeholder="Type address or use Current Location…" required>
+        <div class="row">
+          <button type="button" class="btn" data-loc-for="entity_address">📍 Current Location</button>
+          <a id="mapLink" class="badge link" target="_blank" style="display:none">Open in Maps</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Entity's Type</label>
+      <select class="control" name="entity_type" required>
+        <option value="">Select…</option>
+        <option>Clinic</option>
+        <option>Medical Complex</option>
+        <option>Medical Center</option>
+        <option>Hospital</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>SelectSpecialization</label>
+      <select class="control" name="specialization" required>
+        <option value="">Select…</option>
+        <option>Dental Specialties</option>
+        <option>Surgical Specialties</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Notes</label>
+      <input class="control" name="notes" placeholder="Optional notes">
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Visit Objective</label>
+      <select class="control" name="visit_objective" id="visitObjective" required>
+        <option value="">Select…</option>
+        <option>Other</option>
+        <option>Product Introduction</option>
+        <option>Sample Follow-up</option>
+        <option>New Product Presentation</option>
+        <option>Product Training / Demonstration</option>
+        <option>Post-Sales Follow-up</option>
+        <option>Feedback Collection</option>
+        <option>Needs Assessment</option>
+        <option>Technical Support / Maintenance</option>
+        <option>Order Closing / Order Follow-up</option>
+        <option>Courtesy Visit / Relationship Building</option>
+      </select>
+    </div>
+
+    <div class="field" style="grid-column:1/-1">
+      <label>Other Objective? (required if you choose "Other")</label>
+      <input class="control" name="other_objective" id="otherObjective" placeholder="Describe the objective">
+    </div>
+
+    <div class="field">
+      <label>Rep</label>
+      <select class="control" name="rep" id="repSelect" required>
+        {% for r in rep_choices %}
+          <option value="{{ r.id }}" {% if r.id == request.user.id %}selected{% endif %}>
+            {{ r.get_full_name|default:r.username }}
+          </option>
+        {% empty %}
+          <option value="{{ request.user.id }}" selected>{{ request.user.get_full_name|default:request.user.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Week Number</label>
+      <input class="control" name="week_number" type="number" min="1" max="53" placeholder="e.g. 1" required>
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn primary" type="submit">Save</button>
+    </div>
+  </form>
+
+  <div class="muted" style="padding:8px 0 0 4px">
+    All fields are required. If Visit Objective = Other, then “Other Objective?” must be filled.
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'assets/js/geo.js' %}"></script>
+<script src="{% static 'assets/js/weekly.js' %}"></script>
+{% endblock %}

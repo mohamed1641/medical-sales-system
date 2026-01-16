@@ -1,0 +1,6 @@
+/* minimal styles – keep it light */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:#111;border:1px solid #222;padding:12px;border-radius:12px}
+.kpi .lbl{font-size:.85rem;opacity:.7}
+.kpi .val{font-size:1.6rem;font-weight:700}
+.table-wrap{overflow:auto;border:1px solid #222;border-radius:12px}

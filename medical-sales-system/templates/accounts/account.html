@@ -1,0 +1,151 @@
+{% extends "base.html" %} 
+{% load static %}
+{% block title %}Accounts (Manager Only — Read Only){% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/css/account.css' %}">
+{% endblock %}
+
+{% block body %}
+<!-- Logout form (hidden) -->
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+
+    <!-- NAV: Manager only يظهر Account -->
+    <nav class="tabs" aria-label="Primary" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a class="active" href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+
+    <div class="spacer"></div>
+    <div class="nav-actions">
+      <a class="btn ghost" href="?export=csv&source=visits" title="Export Visits CSV">Export Visits CSV</a>
+      <a class="btn ghost" href="?export=csv&source=clients" title="Export Clients CSV">Export Clients CSV</a>
+      <button class="btn ghost" id="logoutBtn" type="submit" form="logoutForm">Logout</button>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <!-- جدول زيارات يومية (عرض فقط) -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <div class="title">Daily Visits (Read Only)</div>
+        <div class="muted">Pulled from Daily Visits — no editing here</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="visitsTbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Visit Date</th>
+            <th>Entity</th>
+            <th>Objective</th>
+            <th>Other Objective</th>
+            <th>Address</th>
+            <th>City</th>
+
+            <th>Rep</th>
+            <th>Created</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in visits %}
+          <tr>
+            <td>{{ v.id }}</td>
+            <td>{{ v.visit_date }}</td>
+            <td>{{ v.entity|default:"—" }}</td>
+            <td>{{ v.visit_objective|default:"—" }}</td>
+            <td>{{ v.other_objective|default:"—" }}</td>
+            <td>{{ v.address|default:"—" }}</td>
+            <td>{% firstof v.city v.client.city "—" %}</td>
+            
+            <td>{{ v.rep.username }}</td>
+            <td>{{ v.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ v.updated_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="muted">No visits found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- جدول العملاء (عرض فقط) -->
+  <section class="card" style="margin-top:16px">
+    <div class="card-head">
+      <div>
+        <div class="title">Clients (Read Only)</div>
+        <div class="muted">Pulled from Clients — no editing here</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="clientsTbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Doctor/Entity</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>City</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Notes</th>
+            <th>Rep</th>
+            <th>Created</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clients %}
+          <tr>
+            <td>{{ c.id }}</td>
+            <td>
+  {% if c.doctor_name or c.entity_name %}
+    {{ c.doctor_name }}{% if c.doctor_name and c.entity_name %} — {% endif %}{{ c.entity_name }}
+  {% else %}—{% endif %}
+</td>
+
+            <td>{{ c.phone|default:"—" }}</td>
+            <td>{{ c.email|default:"—" }}</td>
+            <td>{{ c.city|default:"—" }}</td>
+            <td>{{ c.location|default:"—" }}</td>
+            <td>{{ c.status|default:"—" }}</td>
+            <td class="truncate">{{ c.notes|default:"—" }}</td>
+            <td>{% if c.rep %}{{ c.rep.username }}{% else %}—{% endif %}</td>
+            <td>{{ c.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ c.updated_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="muted">No clients found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+{# لا يوجد JS إضافي #}
+{% endblock %}

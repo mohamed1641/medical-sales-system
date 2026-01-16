@@ -1,0 +1,321 @@
+{% extends "base.html" %} 
+{% load static %}
+{% block title %}Medical Sales — Reps{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/css/reps.css' %}">
+{% endblock %}
+
+{% block body %}
+
+<!-- Logout form (hidden) -->
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+
+    <!-- NAV TABS (role-based) -->
+    <nav class="tabs" aria-label="Primary" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+
+    <div class="spacer"></div>
+
+    <div class="nav-actions">
+      <!-- Export: بيستخدم نفس فورم الهيدر repsHeaderForm -->
+
+
+      <a class="btn primary" id="newRepBtn" href="#createRep">+ New Rep</a>
+      <button class="btn ghost" id="logoutBtn" type="submit" form="logoutForm">Logout</button>
+      <a class="btn ghost" href="?export=csv" title="Export Reps CSV">Export CSV</a>
+
+  </div>
+</header>
+
+<main class="page">
+{% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+  <!-- Create New Rep/Manager (نفس الاستايل – بدون JS) -->
+  <div id="createRep" class="card" style="max-width:900px; margin:16px auto; padding:16px;">
+    <div class="title" style="margin-bottom:10px">Create New User</div>
+
+    <!-- POST إلى accounts:create (بيحدّد الجروب حسب role) -->
+    <form method="post" action="{% url 'accounts:create' %}"
+          class="grid" style="grid-template-columns:repeat(3,1fr); gap:12px;">
+      {% csrf_token %}
+
+      <div class="field">
+        <label>Username</label>
+        <input class="control" name="username" required minlength="3">
+      </div>
+
+      <div class="field">
+        <label>Role</label>
+        <select class="control" name="role" required>
+          <option value="Rep" selected>Rep</option>
+          <option value="Manager">Manager</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Email</label>
+        <input class="control" type="email" name="email">
+      </div>
+
+      <div class="field">
+        <label>First Name</label>
+        <input class="control" name="first_name" required>
+      </div>
+
+      <div class="field">
+        <label>Last Name</label>
+        <input class="control" name="last_name" required>
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input class="control" type="password" name="password1" required>
+      </div>
+
+      <div class="field">
+        <label>Confirm Password</label>
+        <input class="control" type="password" name="password2" required>
+      </div>
+
+      <!-- لِلـ Rep فقط (اختياريين للـ Manager) -->
+      <div class="field">
+        <label>Phone 1</label>
+        <input class="control" name="phone1" placeholder="01xxxxxxxxx">
+      </div>
+
+      <div class="field">
+        <label>Phone 2</label>
+        <input class="control" name="phone2" placeholder="اختياري">
+      </div>
+
+      <div class="field">
+        <label>Territory</label>
+        <input class="control" name="territory" placeholder="e.g. Cairo East">
+      </div>
+
+      <div class="field" style="display:flex;align-items:end">
+        <label style="display:flex;gap:8px;align-items:center;margin:0;">
+          <input type="checkbox" name="active" checked>
+          <span>Active</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn primary" type="submit">Create</button>
+      </div>
+    </form>
+  </div>
+{% endif %}
+
+{% if messages %}
+  <div class="flash-stack">
+    {% for m in messages %}
+      <div class="flash {{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+  <section class="card" aria-labelledby="reps-title">
+    <div class="card-head">
+      <div>
+        <div id="reps-title" class="title">Reps</div>
+        <div class="muted">Manage sales representatives (search, paginate, activate/deactivate/delete).</div>
+      </div>
+
+      <!-- فورم البحث والحجم (GET) + فلتر Role -->
+      <div class="row">
+        <form id="repsHeaderForm" method="get" action="." class="row" style="gap:12px;align-items:center">
+          <input id="searchBox"
+                 class="control"
+                 name="q"
+                 placeholder="Search (name, email, phone, territory)"
+                 value="{{ q|default:'' }}">
+          <select id="pageSize" name="size" class="control select">
+            <option value="10" {% if size|stringformat:"s" == "10" %}selected{% endif %}>10 rows</option>
+            <option value="25" {% if size|stringformat:"s" == "25" %}selected{% endif %}>25 rows</option>
+            <option value="50" {% if size|stringformat:"s" == "50" %}selected{% endif %}>50 rows</option>
+          </select>
+
+          <!-- NEW: Role filter -->
+          <select id="roleFilter" name="role" class="control select">
+            <option value="" {% if not request.GET.role %}selected{% endif %}>All</option>
+            <option value="Rep" {% if request.GET.role == 'Rep' %}selected{% endif %}>Rep</option>
+            <option value="Manager" {% if request.GET.role == 'Manager' %}selected{% endif %}>Manager</option>
+          </select>
+        </form>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="repsTable">
+        <thead>
+          <tr>
+            <th class="sort" data-key="id">#</th>
+            <th class="sort" data-key="first_name">First Name</th>
+            <th class="sort" data-key="last_name">Last Name</th>
+            <th class="sort" data-key="email">Email</th>
+            <th class="sort" data-key="phone1">Phone 1</th>
+            <th class="sort" data-key="phone2">Phone 2</th>
+            <th class="sort" data-key="territory">Territory</th>
+            <th class="sort" data-key="role">Role</th>  <!-- NEW -->
+            <th class="sort" data-key="active">Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for u in reps %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ u.first_name }}</td>
+            <td>{{ u.last_name }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.repprofile.phone1|default:"—" }}</td>
+            <td>{{ u.repprofile.phone2|default:"—" }}</td>
+            <td>{{ u.repprofile.territory|default:"—" }}</td>
+
+            <!-- NEW: Role badge -->
+            <td>
+              {% with gs=u.groups.all %}
+                {% if gs %}
+                  {% for g in gs %}
+                    {% if g.name == 'Manager' %}
+                      <span class="badge" style="background:#1a73e8">Manager</span>
+                    {% elif g.name == 'Rep' %}
+                      <span class="badge" style="background:#6c757d">Rep</span>
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  <span class="badge">—</span>
+                {% endif %}
+              {% endwith %}
+            </td>
+
+            <td>
+              {% if u.is_active %}
+                <span class="badge" style="background:#18a558">Active</span>
+              {% else %}
+                <span class="badge" style="background:#e53935">Not Active</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <!-- Activate -->
+              <form method="post" action="{% url 'reps:activate' u.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button class="btn" {% if u.is_active %}disabled{% endif %}>Activate</button>
+              </form>
+
+              <!-- Deactivate -->
+              <form method="post" action="{% url 'reps:deactivate' u.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button class="btn ghost" {% if not u.is_active %}disabled{% endif %}>Deactivate</button>
+              </form>
+
+              <!-- Delete -->
+              <form method="post" action="{% url 'reps:delete' u.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button class="btn" style="background:#b00020">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="muted">No reps yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pager -->
+    <div class="pager">
+      {% if page > 1 %}
+        <a class="page-btn" id="prevBtn"
+           href="?q={{ q|urlencode }}&size={{ size }}&role={{ request.GET.role|urlencode }}&page={{ page|add:'-1' }}">Prev</a>
+      {% else %}
+        <button class="page-btn" id="prevBtn" disabled>Prev</button>
+      {% endif %}
+
+      <div class="muted">Page {{ page }} / {{ page_total }}</div>
+
+      {% if page < page_total %}
+        <a class="page-btn" id="nextBtn"
+           href="?q={{ q|urlencode }}&size={{ size }}&role={{ request.GET.role|urlencode }}&page={{ page|add:'1' }}">Next</a>
+      {% else %}
+        <button class="page-btn" id="nextBtn" disabled>Next</button>
+      {% endif %}
+
+      <div class="spacer"></div>
+      <div class="muted">Total: {{ total }}</div>
+    </div>
+  </section>
+</main>
+
+<!-- المودال (اختياري) بنفس الحقول، بيرسل برضه لـ accounts:create -->
+<div class="modal" id="repModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div id="modalTitle" class="title">New User</div>
+      <button class="btn ghost" id="closeModalBtn" aria-label="Close" type="button">✕</button>
+    </div>
+    <form id="repForm" method="post" action="{% url 'accounts:create' %}">
+      {% csrf_token %}
+      <div class="sheet-body">
+        <div class="grid">
+          <div><label>Username</label><input class="control" name="username" required minlength="3"></div>
+          <div>
+            <label>Role</label>
+            <select class="control" name="role" required>
+              <option value="Rep" selected>Rep</option>
+              <option value="Manager">Manager</option>
+            </select>
+          </div>
+          <div class="full"><label>Email</label><input class="control" type="email" name="email"></div>
+          <div><label>First Name</label><input class="control" name="first_name" required minlength="2"></div>
+          <div><label>Last Name</label><input class="control" name="last_name" required minlength="2"></div>
+          <div><label>Password</label><input class="control" type="password" name="password1" required></div>
+          <div><label>Confirm Password</label><input class="control" type="password" name="password2" required></div>
+          <div><label>Phone 1</label><input class="control" name="phone1" placeholder="01xxxxxxxxx"></div>
+          <div><label>Phone 2</label><input class="control" name="phone2" placeholder="اختياري"></div>
+          <div><label>Territory</label><input class="control" name="territory"></div>
+          <input type="hidden" name="id">
+          <div class="full">
+            <label style="display:flex;gap:8px;align-items:center">
+              <input type="checkbox" name="active" checked><span>Active</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="btn" id="deleteBtn" style="display:none">Delete</button>
+        <div class="spacer"></div>
+        <button type="button" class="btn" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn primary" id="saveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'assets/js/reps.js' %}"></script>
+{% endblock %}

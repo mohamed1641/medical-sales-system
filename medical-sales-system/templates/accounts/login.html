@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block extra_css %}
+  {{ block.super }}
+  <!-- Page-specific styles for Login only -->
+  <link rel="stylesheet" href="{% static 'assets/css/login.css' %}">
+{% endblock %}
+
+{% block body %}
+  <!-- LOGIN PAGE (dark / matches project style) -->
+  <main class="login-page">
+    <section class="login-card">
+      <!-- Header / Brand -->
+      <div class="login-head">
+        <div class="brand">
+          <span class="dot"></span>
+          <span class="brand-text">Medical Sales</span>
+        </div>
+        <h1>Sign in</h1>
+        <p class="muted">Use your company account</p>
+      </div>
+
+      <!-- FORM: login -->
+      <form method="post" action="." class="login-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <label>
+          <span>Username</span>
+          <input type="text" name="username" autocomplete="username" required>
+        </label>
+
+        <label>
+          <span>Password</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+
+        <div class="row between">
+          <label class="remember">
+            <input type="checkbox" name="remember_me">
+            <span>Remember me</span>
+          </label>
+          <a href="#" class="muted small">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="btn-primary">Log in</button>
+      </form>
+      <!-- /FORM -->
+
+      <footer class="login-foot muted">© {% now "Y" %} Medical Sales</footer>
+    </section>
+  </main>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends "base.html" %} 
+{% load static %}
+{% block title %}Archives — Weekly Plans Snapshot (1-Year){% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/css/archives.css' %}">
+{% endblock %}
+
+{% block body %}
+<!-- PAGE CONTENT START -->
+
+<!-- Logout form (hidden) to keep the same button and avoid JS) -->
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="dot"></span> Medical Sales</div>
+
+    <!-- NAV (server-side; rendered per role) -->
+    <nav class="tabs" id="navTabs">
+      {% if request.user.is_authenticated and request.user.groups.all.0.name == 'Manager' %}
+        <a href="{% url 'dashboard:main' %}">Dashboard</a>
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+        <a href="{% url 'reps:list' %}">Reps</a>
+        <a href="{% url 'archives:list' %}">Archives</a>
+        <a href="{% url 'accounts:account' %}">Account</a>
+      {% else %}
+        <a href="{% url 'plans:weekly' %}">Weekly</a>
+        <a href="{% url 'visits:daily' %}">Daily</a>
+        <a href="{% url 'clients:list' %}">Clients</a>
+      {% endif %}
+    </nav>
+
+    <div style="flex:1"></div>
+    <button class="btn ghost" id="logoutBtn" type="submit" form="logoutForm">Logout</button>
+    <a class="btn ghost"
+   href="{% url 'archives:list' %}?{% if request.GET %}{{ request.GET.urlencode }}&{% endif %}export=csv"
+   title="Export CSV">Export CSV</a>
+
+
+  </div>
+</header>
+
+<main class="page">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <div class="title">Archives</div>
+        <div class="muted">Snapshot ALL Weekly Plans and keep for 1 year (auto-prune).</div>
+      </div>
+
+      <!-- نفس عناصر الفرونت — اتلفّت في form GET، و Export شغّال بـ formaction -->
+      <div class="row" style="gap:12px;align-items:center">
+        <button id="syncBtn" class="btn primary" type="button">Sync from Weekly Now</button>
+
+        <form method="get" action="." class="row" style="gap:12px;align-items:center">
+          <select id="quick" name="quick" class="control">
+            {% with rq=request.GET.quick|default:'365' %}
+              <option value="365" {% if rq == '365' %}selected{% endif %}>Last 12 months</option>
+              <option value="180" {% if rq == '180' %}selected{% endif %}>Last 6 months</option>
+              <option value="90"  {% if rq == '90'  %}selected{% endif %}>Last 90 days</option>
+              <option value="all" {% if rq == 'all' %}selected{% endif %}>All time</option>
+            {% endwith %}
+          </select>
+
+          <input id="from" name="from" class="control" type="date" value="{{ request.GET.from|default:'' }}">
+          <input id="to"   name="to"   class="control" type="date" value="{{ request.GET.to|default:'' }}">
+
+          <input id="q" name="q" class="control" placeholder="Search…" value="{{ request.GET.q|default:'' }}">
+
+          <!-- Export بنفس الفلاتر الحالية -->
+          
+        </form>
+      </div>
+    </div>
+
+    <div class="note">
+      * كل مزامنة بتضيف/تحدّث صفوف الأرشيف وتختمها بـ <b>archived_at</b>، وأي عنصر أقدم من 365 يوم بيتحذف تلقائيًا.
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">Archived Rows</div><div id="k_rows" class="val">0</div></div>
+      <div class="kpi"><div class="lbl">Unique Reps</div><div id="k_reps" class="val">0</div></div>
+      <div class="kpi"><div class="lbl">Unique Accounts</div><div id="k_accounts" class="val">0</div></div>
+      <div class="kpi"><div class="lbl">Last Sync</div><div id="k_last" class="val">—</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <!-- START: DATA TABLE -->
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>Archived At</th><th>Planned Date</th><th>Week #</th><th>Rep</th><th>Aa Plan</th>
+            <th>Targeted Line</th><th>Entity Type</th><th>Specialization</th><th>Visit Objective</th>
+            <th>Address</th><th>Notes</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ r.archived_at }}</td>
+            <td>{{ r.planned_date|default:"—" }}</td>
+            <td>{{ r.week_no|default:"—" }}</td>
+            <td>{% if r.rep %}{{ r.rep.get_full_name|default:r.rep.username }}{% else %}—{% endif %}</td>
+            <td>{{ r.aa_plan|default:"—" }}</td>
+            <td>{{ r.targeted_line|default:"—" }}</td>
+            <td>{{ r.entity_type|default:"—" }}</td>
+            <td>{{ r.specialization|default:"—" }}</td>
+            <td>{{ r.visit_objective|default:"—" }}</td>
+            <td>{{ r.entity_address|default:"—" }}</td>
+            <td>{{ r.notes|default:"—" }}</td>
+            <td>{{ r.status|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="13" class="muted">No archived rows.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<!-- PAGE CONTENT END -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    // helpers
+    function setText(id, val, fallback) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = (val && String(val).trim()) ? val : (fallback || '0');
+    }
+
+    setText('k_rows',     '{{ k_rows|default:"0" }}');
+    setText('k_reps',     '{{ k_reps|default:"0" }}');
+    setText('k_accounts', '{{ k_accounts|default:"0" }}');
+    // ماينفعش نستخدم ?. على الشمال في assignment
+    var lastEl = document.getElementById('k_last');
+    if (lastEl) lastEl.textContent = '{{ k_last|default:"—" }}';
+  })();
+
+(function(){
+  const btn = document.getElementById('syncBtn');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    const csrf = document.querySelector('#logoutForm input[name=csrfmiddlewaretoken]')?.value || '';
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Syncing...';
+    try {
+      const res = await fetch('/archives/sync/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'}
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok !== true) throw new Error(data.error || `HTTP ${res.status}`);
+      alert(`Done.\nCreated: ${data.created}\nMerged: ${data.merged}\nTouched: ${data.touched}`);
+      location.reload();
+    } catch (e) {
+      alert('Sync failed: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
+  });
+})();
+
+
+</script>
+<script src="{% static 'assets/js/archives.js' %}"></script>
+{% endblock %}

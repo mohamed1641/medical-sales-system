@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Create User{% endblock %}
+
+{% block extra_css %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'assets/css/app.css' %}">
+{% endblock %}
+
+{% block body %}
+<form id="logoutForm" method="post" action="{% url 'accounts:logout' %}" style="display:none">
+  {% csrf_token %}
+</form>
+
+<main class="page" style="max-width:900px;margin:24px auto;padding:0 16px;">
+  <div class="card" style="padding:16px;">
+    <div class="title" style="margin-bottom:12px">Create New User</div>
+    <p class="muted" style="margin-top:0">Manager-only. This form creates either a Rep or Manager account and stores extra Rep info in <code>RepProfile</code>.</p>
+
+    {% if messages %}
+      <div class="flash-stack">
+        {% for m in messages %}
+          <div class="flash {{ m.tags }}">{{ m }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'accounts:create' %}" class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px;">
+      {% csrf_token %}
+
+      <div class="field">
+        <label>Username</label>
+        <input class="control" name="username" required minlength="3">
+      </div>
+
+      <div class="field">
+        <label>Role</label>
+        <select class="control" name="role" required>
+          <option value="Rep" selected>Rep</option>
+          <option value="Manager">Manager</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Email</label>
+        <input class="control" type="email" name="email">
+      </div>
+
+      <div class="field">
+        <label>First Name</label>
+        <input class="control" name="first_name" required>
+      </div>
+
+      <div class="field">
+        <label>Last Name</label>
+        <input class="control" name="last_name" required>
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input class="control" type="password" name="password1" required>
+      </div>
+
+      <div class="field">
+        <label>Confirm Password</label>
+        <input class="control" type="password" name="password2" required>
+      </div>
+
+      <div class="field">
+        <label>Phone 1</label>
+        <input class="control" name="phone1">
+      </div>
+
+      <div class="field">
+        <label>Phone 2</label>
+        <input class="control" name="phone2">
+      </div>
+
+      <div class="field">
+        <label>Territory</label>
+        <input class="control" name="territory">
+      </div>
+
+      <div class="field" style="display:flex;align-items:end">
+        <label style="display:flex;gap:8px;align-items:center;margin:0;">
+          <input type="checkbox" name="active" checked>
+          <span>Active</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn primary" type="submit">Create</button>
+      </div>
+
+      <div class="field">
+        <label>&nbsp;</label>
+        <a class="btn ghost" href="{% url 'reps:list' %}">Back to Reps</a>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock %}
